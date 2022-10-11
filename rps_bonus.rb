@@ -2,6 +2,10 @@ require "yaml"
 MESSAGE = YAML.load_file("rps_bonus.yml")
 
 module Promptable
+  def prompt(msg)
+    puts(msg)
+  end
+
   def user_says_yes?(msg)
     answer = nil
     loop do
@@ -16,32 +20,19 @@ end
 
 class Move
   VALUES = ["rock", "paper", "scissors", "lizard", "spock"]
+
+  WINS = {
+    "rock" => ["scissors", "lizard"],
+    "paper" => ["spock", "rock"],
+    "scissors" => ["lizard", "paper"],
+    "lizard" => ["spock", "paper"],
+    "spock" => ["rock", "scissors"]
+  }
+
   attr_reader :value
 
   def initialize(value)
     @value = value
-  end
-
-  def >(other_move)
-    winning_scenarios = {
-      "rock" => ["scissors", "lizard"],
-      "paper" => ["spock", "rock"],
-      "scissors" => ["lizard", "paper"],
-      "lizard" => ["spock", "paper"],
-      "spock" => ["rock", "scissors"]
-    }
-    winning_scenarios[value].include?(other_move.value)
-  end
-
-  def <(other_move)
-    losing_scenarios = {
-      "rock" => ["paper", "spock"],
-      "paper" => ["scissors", "lizard"],
-      "scissors" => ["rock", "spock"],
-      "lizard" => ["scissors", "rock"],
-      "spock" => ["paper", "lizard"]
-    }
-    losing_scenarios[value].include?(other_move.value)
   end
 end
 
@@ -58,26 +49,39 @@ class Player
 end
 
 class Human < Player
+  include Promptable
+
   def choose
     choice = nil
     loop do
-      puts MESSAGE["move_options"]
-      choice = gets.chomp
+      prompt(MESSAGE["move_options"])
+      choice = gets.chomp.downcase
+      choice = translate(choice) if choice.length == 1
       break if Move::VALUES.include?(choice)
-      puts "Sorry, invalid choice."
+      prompt("Sorry, invalid choice.")
     end
     self.move = Move.new(choice)
   end
 
   private
 
+  def translate(choice)
+    case choice
+    when "r" then "rock"
+    when "p" then "paper"
+    when "s" then "scissors"
+    when "l" then "lizard"
+    when "k" then "spock"
+    end
+  end
+
   def set_name
     n = nil
     loop do
-      puts "What's your name?"
-      n = gets.chomp
+      prompt("What's your name?")
+      n = gets.chomp.strip
       break unless n.empty?
-      puts "Sorry, name must not be empty"
+      prompt("Sorry, name must not be empty")
     end
     self.name = n
   end
@@ -141,6 +145,8 @@ class Score
 end
 
 class Record
+  include Promptable
+
   def initialize
     @list = {}
   end
@@ -154,12 +160,12 @@ class Record
   end
 
   def display(plyr1, plyr2)
-    puts "| Move# |#{plyr1.name.center(15)}|#{plyr2.name.center(15)}|"
+    prompt("| Move# |#{plyr1.name.center(15)}|#{plyr2.name.center(15)}|")
 
     plyr1_moves = list[plyr1.name]
     plyr1_moves.each_with_index do |move, idx|
       plyr2_moves = list[plyr2.name][idx]
-      puts "|   #{idx + 1}   |#{move.center(15)}|#{plyr2_moves.center(15)}|"
+      prompt("|   #{idx + 1}   |#{move.center(15)}|#{plyr2_moves.center(15)}|")
     end
   end
 
@@ -199,24 +205,29 @@ class RPSGame
 
   attr_reader :human, :robot, :score, :list_of_moves
 
+  def delay(duration)
+    sleep(duration)
+  end
+
   def display_welcome_message
-    puts MESSAGE["welcome"]
-    puts MESSAGE["game_length"]
-    sleep 2
-    puts ""
+    prompt(MESSAGE["welcome"])
+    prompt(MESSAGE["game_length"])
+    delay(2)
+    prompt("")
   end
 
   def display_competitor_name
-    puts ""
-    puts "Hello #{human.name}. You'll be playing against #{robot.name} today."
-    sleep 1.5
-    puts ""
+    prompt("")
+    prompt("Hi #{human.name}. You'll be playing against #{robot.name} today.")
+    delay(1.5)
+    prompt("")
   end
 
   def game_on
     loop do
       next_round
       break if game_over?
+      clear_screen
     end
   end
 
@@ -226,55 +237,70 @@ class RPSGame
     list_of_moves.update(human)
     list_of_moves.update(robot)
     display_choices
-    display_round_winner
+    determine_round_winner
     update_score
     display_score
   end
 
   def display_choices
-    sleep 1.5
-    puts ""
-    puts "#{human.name} chose #{human.move.value.capitalize}"
-    sleep 1.5
-    puts "#{robot.name} chose #{robot.move.value.capitalize}"
-    sleep 1.5
+    delay(1.5)
+    prompt("")
+    prompt("#{human.name} chose #{human.move.value.capitalize}")
+    delay(1.5)
+    prompt("#{robot.name} chose #{robot.move.value.capitalize}")
+    delay(1.5)
   end
 
-  def display_round_winner
-    if @human.move > @robot.move
-      display_winning_move(human, robot)
-      puts "#{@human.name} wins this round!"
-    elsif @human.move < @robot.move
-      display_winning_move(robot, human)
-      puts "#{@robot.name} wins this round!"
+  def determine_round_winner
+    human_move = @human.move.value
+    robot_move = @robot.move.value
+
+    result = if human_move == robot_move
+               "It's a tie!"
+             elsif Move::WINS[human_move].include?(robot_move)
+               [human, robot]
+             else
+               [robot, human]
+             end
+
+    display_winning_move(result)
+  end
+
+  def display_winning_move(result)
+    if result.class == String
+      prompt(result)
     else
-      puts "---It's a tie!---"
+      winning_move = result.first.move.value.capitalize
+      losing_move = result.last.move.value.capitalize
+      prompt("#{winning_move} beats #{losing_move}")
+      delay(1.5)
+      display_round_winner(result.first)
     end
   end
 
-  def display_winning_move(plyr1, plyr2)
-    winning_move = plyr1.move.value.capitalize
-    losing_move = plyr2.move.value.capitalize
-    puts "#{winning_move} beats #{losing_move}"
-    sleep 1.5
+  def display_round_winner(winner)
+    prompt("#{winner.name} wins this round!")
   end
 
   def update_score
-    if human.move > robot.move
+    human_move = @human.move.value
+    robot_move = @robot.move.value
+
+    if Move::WINS[human_move].include?(robot_move)
       score.update(human)
-    elsif human.move < robot.move
+    elsif Move::WINS[robot_move].include?(human_move)
       score.update(robot)
     end
   end
 
   def display_score
-    sleep 1.5
-    puts ""
-    puts "SCOREBOARD:"
-    puts "#{human.name}: #{score.display(human)}"
-    puts "#{robot.name}: #{score.display(robot)}"
-    puts ""
-    sleep 1.5
+    delay(1.5)
+    prompt("")
+    prompt("SCOREBOARD:")
+    prompt("#{human.name}: #{score.display(human)}")
+    prompt("#{robot.name}: #{score.display(robot)}")
+    prompt("")
+    delay(2)
   end
 
   def game_over?
@@ -283,17 +309,17 @@ class RPSGame
 
   def display_game_results
     game_winner = score.tally.key(Score::MAX_ROUNDS)
-    puts "That's #{Score::MAX_ROUNDS} wins! #{game_winner} wins the game!"
-    sleep 1.5
-    puts ""
+    prompt("That's #{Score::MAX_ROUNDS} wins! #{game_winner} wins the game!")
+    delay(1.5)
+    prompt("")
     display_list_of_moves if user_says_yes?(MESSAGE["list_of_moves"])
   end
 
   def display_list_of_moves
-    puts ""
+    prompt("")
     list_of_moves.display(human, robot)
     reset_game
-    puts ""
+    prompt("")
   end
 
   def reset_game
@@ -306,7 +332,7 @@ class RPSGame
   end
 
   def display_goodbye_message
-    puts MESSAGE["goodbye"]
+    prompt(MESSAGE["goodbye"])
   end
 end
 

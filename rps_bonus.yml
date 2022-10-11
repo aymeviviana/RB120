@@ -1,7 +1,6 @@
 welcome: "Welcome to Rock, Paper, Scissors!"
 game_length: "First player to win 3 rounds wins the game!"
-move_options: "Please choose rock, paper, scissors, lizard or spock:"
+move_options: "Please choose 'r' (rock), 'p' (paper), 's' (scissors), 'l' (lizard) or 'k' (spock):"
 list_of_moves: "Would you like to see a list of all the moves in this game? (y/n)"
 play_again: "Do you want to play again? (y/n)"
 goodbye: "Thanks for playing Rock, Paper, Scissors. Bye!"
-
