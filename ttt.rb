@@ -17,29 +17,11 @@ module Displayable
     prompt("Hi #{player1.name}! You'll be playing against #{player2.name}.")
   end
 
-  def display_marker_message
-    prompt("")
-    prompt("Do you prefer #{TTTGame::MARKER_1}'s or #{TTTGame::MARKER_2}'s?")
-    prompt("Enter '#{TTTGame::MARKER_1}' or '#{TTTGame::MARKER_2}'.")
-  end
-
-  def select_name(player)
-    name = nil
-    prompt(MESSAGE["player_name"])
-
-    loop do
-      name = gets.chomp.strip
-      break unless name.empty?
-      prompt(MESSAGE["try_name_again"])
-    end
-    player.name = name
-  end
-
   def display_goodbye_message
     prompt(MESSAGE["goodbye"])
   end
 
-  def display_next_round_message
+  def display_continue_message
     prompt(MESSAGE["continue"])
     gets.chomp
   end
@@ -188,10 +170,6 @@ class Square
     marker == EMPTY_MARKER
   end
 
-  def marked?
-    marker != EMPTY_MARKER
-  end
-
   private
 
   def to_s
@@ -201,6 +179,21 @@ end
 
 class Player
   attr_accessor :marker, :name
+end
+
+class Human < Player
+  include Displayable
+  def select_name
+    name = nil
+    prompt(MESSAGE["player_name"])
+
+    loop do
+      name = gets.chomp.strip
+      break unless name.empty?
+      prompt(MESSAGE["try_name_again"])
+    end
+    self.name = name
+  end
 end
 
 class Computer < Player
@@ -245,23 +238,23 @@ class TTTGame
 
   MARKER_1 = "X"
   MARKER_2 = "O"
-  FIRST_TO_MOVE = :human_player
+  @@first_to_move = :human_player
 
   def initialize
     @board = Board.new
-    @human = Player.new
+    @human = Human.new
     @computer = Computer.new
     @score = Score.new
-    @current_player = FIRST_TO_MOVE
+    @current_player = @@first_to_move
   end
 
   def play
     clear
     display_welcome_message
-    select_name(human)
+    select_player_name
     display_player_names(human, computer)
     display_marker_message
-    select_marker
+    display_first_player_message
     main_game
     display_goodbye_message
   end
@@ -270,6 +263,13 @@ class TTTGame
 
   attr_reader :human, :computer, :board, :score
 
+  def display_marker_message
+    prompt("")
+    prompt("Do you prefer #{TTTGame::MARKER_1}'s or #{TTTGame::MARKER_2}'s?")
+    prompt("Enter '#{TTTGame::MARKER_1}' or '#{TTTGame::MARKER_2}'.")
+    select_marker
+  end
+
   def select_marker
     choice = nil
     loop do
@@ -277,8 +277,23 @@ class TTTGame
       break if [MARKER_1, MARKER_2].include?(choice)
       prompt("Sorry! Please enter '#{MARKER_1}' or '#{MARKER_2}'")
     end
+    prompt("")
+    prompt("Great! You'll be an #{choice}.")
     assign_markers(choice)
   end
+
+  def select_player_name
+    human.select_name
+  end
+
+  # rubocop:disable Layout/LineLength
+  def display_first_player_message
+    prompt("")
+    prompt("You'll go first during the initial round\nand alterate with #{computer.name} for each subsequent round.")
+    prompt("")
+    display_continue_message
+  end
+  # rubocop:enable Layout/LineLength
 
   def assign_markers(human_choice)
     human.marker = human_choice
@@ -306,7 +321,7 @@ class TTTGame
       update_score
       display_score
       break if someone_won_game?
-      display_next_round_message
+      display_continue_message
       reset_round
     end
   end
@@ -326,12 +341,16 @@ class TTTGame
     display_board
   end
 
+  # rubocop:disable Layout/LineLength
   def display_board
-    puts "You're an #{human.marker}. #{computer.name} is an #{computer.marker}"
-    puts ""
+    prompt("You're an #{human.marker}. #{computer.name} is an #{computer.marker}")
+    prompt("")
+    prompt("#{display_first_to_move} goes first this round!")
+    prompt("")
     board.draw
-    puts ""
+    prompt("")
   end
+  # rubocop:enable Layout/LineLength
 
   def current_player_moves
     human_turn? ? human_moves : computer_moves
@@ -351,15 +370,25 @@ class TTTGame
   end
 
   def human_moves
-    square_number = nil
+    str_number = nil
     prompt("Please choose an available square (#{joinor(board.unmarked_keys)})")
     loop do
-      square_number = gets.chomp.to_i
-      break if board.unmarked_keys.include?(square_number)
+      str_number = gets.chomp
+      break if valid_choice?(str_number)
       prompt(MESSAGE["invalid_choice"])
     end
 
-    board[square_number] = human.marker
+    board[str_number.to_i] = human.marker
+  end
+
+  def valid_choice?(str_number)
+    if str_number.include?(".") || str_number.start_with?("0")
+      false
+    elsif board.unmarked_keys.include?(str_number.to_i)
+      true
+    else
+      false
+    end
   end
 
   def computer_moves
@@ -426,7 +455,10 @@ class TTTGame
   end
 
   def reset_game
-    reset_round
+    board.reset
+    @@first_to_move = :human_player
+    @current_player = @@first_to_move
+    clear
     score.reset
   end
 
@@ -440,8 +472,25 @@ class TTTGame
 
   def reset_round
     board.reset
-    @current_player = FIRST_TO_MOVE
+    update_first_to_move
     clear
+  end
+
+  def display_first_to_move
+    if @@first_to_move == :human_player
+      human.name
+    else
+      computer.name
+    end
+  end
+
+  def update_first_to_move
+    @@first_to_move = if @@first_to_move == :human_player
+                        :computer_player
+                      else
+                        :human_player
+                      end
+    @current_player = @@first_to_move
   end
 end
 
